@@ -3,15 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Steam Games Tracker</title>
+    <title>Game Library Tracker</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body {
-            background-image: url('https://images.pexels.com/photos/163036/gaming-controller-video-games-163036.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=750&w=1260');
-            background-size: cover;
-            background-attachment: fixed;
-            background-position: center;
+            background: linear-gradient(135deg, #020b3d 0%, #1d4e9b 100%);
             min-height: 100vh;
+            color: #fff;
         }
         .overlay {
             background-color: rgba(0, 0, 0, 0.78);
@@ -46,7 +44,7 @@
     <div class="overlay">
         <nav class="navbar navbar-expand-lg navbar-dark bg-transparent py-3">
             <div class="container-fluid">
-                <a class="navbar-brand" href="home.html">Steam Games Tracker</a>
+                <a class="navbar-brand" href="home.html">Game Library Tracker</a>
                 <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                     <span class="navbar-toggler-icon"></span>
                 </button>
@@ -62,14 +60,18 @@
 
         <div class="container">
             <div class="row gy-4">
-                <div class="col-lg-5">
+                <div class="col-lg-4">
                     <div class="card bg-dark bg-opacity-75 text-white mb-4">
                         <div class="card-body">
-                            <h2 id="panelTitle">Sign In or Continue as Guest</h2>
-                            <p id="panelSubtitle">Create an account to calculate scores and connect with Steam.</p>
+                            <h2 id="panelTitle">Sign In or Browse as Guest</h2>
+                            <p id="panelSubtitle">Use Google or email signup to save your game progress.</p>
+                            <div class="mb-3">
+                                <button id="googleSignInBtn" class="btn btn-outline-light w-100 mb-3">Sign in with Google</button>
+                                <div class="text-center text-white-50">or</div>
+                            </div>
                             <div id="authBox">
                                 <div class="mb-3">
-                                    <input type="text" id="username" class="form-control" placeholder="Username">
+                                    <input type="email" id="email" class="form-control" placeholder="Email address">
                                 </div>
                                 <div class="mb-3">
                                     <input type="password" id="password" class="form-control" placeholder="Password">
@@ -88,34 +90,29 @@
 
                     <div class="card bg-dark bg-opacity-75 text-white mb-4">
                         <div class="card-body">
-                            <h4>Steam Settings</h4>
-                            <p>Connect your Steam API Key and Steam ID to load your owned games.</p>
-                            <div class="mb-3">
-                                <input type="text" id="apiKey" class="form-control" placeholder="Steam API Key">
-                            </div>
-                            <div class="mb-3">
-                                <input type="text" id="steamId" class="form-control" placeholder="Steam ID">
-                            </div>
-                            <div class="d-grid">
-                                <button id="fetchBtn" class="btn btn-success">Fetch Steam Games</button>
-                            </div>
-                            <p class="small mt-3 text-white-50">Guests can browse, but must sign in to calculate score.</p>
+                            <h4>How it works</h4>
+                            <ul class="small">
+                                <li>Google login gives you a Gmail-backed account.</li>
+                                <li>Email signup sends a verification link.</li>
+                                <li>Logged-in users save played games to their profile.</li>
+                                <li>Guests can browse but cannot calculate rating.</li>
+                            </ul>
                         </div>
                     </div>
                 </div>
 
-                <div class="col-lg-7">
+                <div class="col-lg-8">
                     <div class="card bg-dark bg-opacity-75 text-white mb-4">
                         <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div class="d-flex justify-content-between align-items-start mb-3">
                                 <div>
                                     <h4 id="welcomeTitle">Welcome</h4>
-                                    <p id="welcomeText">Please log in or continue as a guest to start.</p>
+                                    <p id="welcomeText">Sign in to save your game profile and rating.</p>
                                 </div>
                                 <button id="signoutBtn" class="btn btn-outline-light btn-sm" style="display: none;">Sign Out</button>
                             </div>
                             <div class="mb-3" id="searchWrapper" style="display: none;">
-                                <input type="text" id="search" class="form-control" placeholder="Search games...">
+                                <input type="search" id="search" class="form-control" placeholder="Search games...">
                             </div>
                             <div class="row" id="gameList"></div>
                             <div class="text-center mt-4">
@@ -129,269 +126,384 @@
         </div>
     </div>
 
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        const accountKey = 'steamTrackerAccounts';
-        const sessionKey = 'steamTrackerSession';
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_PROJECT_ID.appspot.com",
+            messagingSenderId: "YOUR_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+        const provider = new firebase.auth.GoogleAuthProvider();
+
+        const emailInput = document.getElementById('email');
+        const passwordInput = document.getElementById('password');
+        const authMessage = document.getElementById('authMessage');
+        const panelTitle = document.getElementById('panelTitle');
+        const panelSubtitle = document.getElementById('panelSubtitle');
+        const welcomeTitle = document.getElementById('welcomeTitle');
+        const welcomeText = document.getElementById('welcomeText');
+        const signoutBtn = document.getElementById('signoutBtn');
+        const searchWrapper = document.getElementById('searchWrapper');
+        const searchInput = document.getElementById('search');
+        const gameList = document.getElementById('gameList');
+        const calculateBtn = document.getElementById('calculateBtn');
+        const resultDiv = document.getElementById('result');
+
+        const RAWG_API_KEY = "YOUR_RAWG_API_KEY";
+        const RAWG_BASE_URL = "https://api.rawg.io/api/games";
+
         let games = [];
+        let playedGames = [];
         let currentUser = null;
         let isGuest = false;
+        let searchTimer = null;
 
-        const gameList = $('#gameList');
+        const getUserRef = () => db.collection('users').doc(currentUser.uid);
 
-        function saveAccounts(accounts) {
-            localStorage.setItem(accountKey, JSON.stringify(accounts));
-        }
-
-        function loadAccounts() {
-            return JSON.parse(localStorage.getItem(accountKey) || '{}');
-        }
-
-        function saveSession(session) {
-            localStorage.setItem(sessionKey, JSON.stringify(session));
-        }
-
-        function loadSession() {
-            return JSON.parse(localStorage.getItem(sessionKey) || 'null');
+        async function fetchGameLibrary(search = '') {
+            const queryString = search ? `&search=${encodeURIComponent(search)}` : '&ordering=-metacritic';
+            const requestUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(`${RAWG_BASE_URL}?key=${RAWG_API_KEY}&page_size=24${queryString}`)}`;
+            try {
+                hideMessage();
+                const response = await fetch(requestUrl);
+                const data = await response.json();
+                games = (data.results || []).map(game => ({
+                    id: game.id,
+                    name: game.name,
+                    score: game.metacritic || 0,
+                    image: game.background_image || 'images/default-game.jpg',
+                    released: game.released || 'Unknown',
+                    profile: game.genres ? game.genres.map(g => g.name).join(', ') : 'Genre unknown'
+                }));
+                renderGames(search);
+                if (!games.length) {
+                    showMessage('No games were returned from the API.', 'warning');
+                }
+            } catch (error) {
+                showMessage('Unable to load the game library. Check your RAWG API key and network.', 'danger');
+            }
         }
 
         function showMessage(message, type = 'warning') {
-            $('#authMessage').removeClass('alert-warning alert-success alert-danger').addClass('alert-' + type).text(message).show();
+            authMessage.textContent = message;
+            authMessage.className = 'alert alert-' + type + ' mt-3';
+            authMessage.style.display = 'block';
         }
 
         function hideMessage() {
-            $('#authMessage').hide();
+            authMessage.style.display = 'none';
         }
 
-        function updateUiForAuth() {
+        function isCurrentUserVerified() {
+            return currentUser && (currentUser.emailVerified || currentUser.providerData.some(p => p.providerId === 'google.com'));
+        }
+
+        function updateAuthUI() {
             if (currentUser) {
-                $('#panelTitle').text('Logged in as ' + currentUser.username);
-                $('#panelSubtitle').text('You can now fetch Steam games and calculate your score.');
-                $('#welcomeTitle').text('Welcome, ' + currentUser.username);
-                $('#welcomeText').text('Enter your Steam credentials to load games and calculate your rating.');
-                $('#signoutBtn').show();
-                $('#loginBtn, #signupBtn, #guestBtn').hide();
-                $('#username, #password').hide();
+                panelTitle.textContent = 'Logged in as ' + (currentUser.displayName || currentUser.email);
+                panelSubtitle.textContent = 'Your progress is saved and ratings are available.';
+                welcomeTitle.textContent = 'Welcome, ' + (currentUser.displayName || currentUser.email);
+                welcomeText.textContent = 'Search your game library and mark played titles.';
+                signoutBtn.style.display = 'inline-block';
+                document.getElementById('authBox').style.display = 'none';
+                document.getElementById('guestBtn').style.display = 'none';
             } else if (isGuest) {
-                $('#panelTitle').text('Guest Mode');
-                $('#panelSubtitle').text('Browse games freely, but score calculation is locked.');
-                $('#welcomeTitle').text('Guest Access');
-                $('#welcomeText').text('You can search and browse games, but sign up to calculate scores.');
-                $('#signoutBtn').show();
-                $('#loginBtn, #signupBtn, #guestBtn').hide();
-                $('#username, #password').hide();
+                panelTitle.textContent = 'Guest Mode';
+                panelSubtitle.textContent = 'Browse games freely, but ratings are locked.';
+                welcomeTitle.textContent = 'Guest Access';
+                welcomeText.textContent = 'Mark games as played and sign in later to save progress.';
+                signoutBtn.style.display = 'inline-block';
+                document.getElementById('authBox').style.display = 'none';
+                document.getElementById('guestBtn').style.display = 'inline-block';
             } else {
-                $('#panelTitle').text('Sign In or Continue as Guest');
-                $('#panelSubtitle').text('Create an account to calculate scores and connect with Steam.');
-                $('#welcomeTitle').text('Welcome');
-                $('#welcomeText').text('Please log in or continue as a guest to start.');
-                $('#signoutBtn').hide();
-                $('#loginBtn, #signupBtn, #guestBtn').show();
-                $('#username, #password').show();
+                panelTitle.textContent = 'Sign In or Browse as Guest';
+                panelSubtitle.textContent = 'Use Gmail or email signup to save your progress.';
+                welcomeTitle.textContent = 'Welcome';
+                welcomeText.textContent = 'Sign in to save your game data and calculate ratings.';
+                signoutBtn.style.display = 'none';
+                document.getElementById('authBox').style.display = 'block';
+                document.getElementById('guestBtn').style.display = 'inline-block';
+            }
+
+            if (!currentUser && !isGuest) {
+                searchWrapper.style.display = 'none';
+                calculateBtn.style.display = 'none';
+                resultDiv.style.display = 'none';
             }
         }
 
-        function enableApp() {
-            $('#searchWrapper').show();
-            $('#calculateBtn').show();
-            $('#authMessage').hide();
+        function getPlayedContext() {
+            if (currentUser) {
+                return playedGames;
+            }
+            return JSON.parse(localStorage.getItem('guestPlayed') || '[]');
+        }
+
+        function setPlayedContext(list) {
+            if (currentUser) {
+                playedGames = list;
+                saveProgress();
+            } else {
+                localStorage.setItem('guestPlayed', JSON.stringify(list));
+                playedGames = list;
+            }
+        }
+
+        function createGameCard(game, playedIds) {
+            const col = document.createElement('div');
+            col.className = 'col-md-6 mb-3';
+
+            const card = document.createElement('div');
+            card.className = 'card';
+
+            const img = document.createElement('img');
+            img.src = game.image;
+            img.className = 'card-img-top';
+            img.alt = game.name;
+            card.appendChild(img);
+
+            const body = document.createElement('div');
+            body.className = 'card-body';
+
+            const label = document.createElement('label');
+            label.className = 'form-check-label d-block';
+            label.htmlFor = 'game-' + game.id;
+            label.innerHTML = `<strong>${game.name}</strong><br><small class="text-muted">Score: ${game.score || 'N/A'}</small><br><small class="text-muted">${game.released} • ${game.profile}</small>`;
+
+            const check = document.createElement('input');
+            check.type = 'checkbox';
+            check.className = 'form-check-input me-2';
+            check.id = 'game-' + game.id;
+            check.value = game.id;
+            check.checked = playedIds.includes(game.id);
+            check.disabled = isGuest;
+            check.addEventListener('change', () => {
+                if (isGuest) {
+                    showMessage('Guests cannot mark games as played. Please sign in.', 'warning');
+                    check.checked = false;
+                    return;
+                }
+                const played = getPlayedContext();
+                if (check.checked) {
+                    if (!played.includes(game.id)) {
+                        played.push(game.id);
+                    }
+                } else {
+                    const index = played.indexOf(game.id);
+                    if (index !== -1) played.splice(index, 1);
+                }
+                setPlayedContext(played);
+                updateRatingMessage();
+            });
+
+            const checkWrapper = document.createElement('div');
+            checkWrapper.className = 'form-check';
+            checkWrapper.appendChild(check);
+            checkWrapper.appendChild(label);
+
+            body.appendChild(checkWrapper);
+            card.appendChild(body);
+            col.appendChild(card);
+            return col;
         }
 
         function renderGames(filter = '') {
-            gameList.empty();
+            const playedIds = getPlayedContext();
+            gameList.innerHTML = '';
             games.filter(game => game.name.toLowerCase().includes(filter.toLowerCase())).forEach(game => {
-                const col = $('<div class="col-md-6 mb-3"></div>');
-                const card = $(`<div class="card">
-                    <img src="${game.image}" class="card-img-top" alt="${game.name}">
-                    <div class="card-body">
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="game-${game.appid}" value="${game.name}">
-                            <label class="form-check-label" for="game-${game.appid}">
-                                <strong>${game.name}</strong><br>
-                                <small class="text-muted">Score: ${game.score || 'N/A'}</small>
-                            </label>
-                        </div>
-                    </div>
-                </div>`);
-                col.append(card);
-                gameList.append(col);
+                gameList.appendChild(createGameCard(game, playedIds));
             });
         }
 
-        function loadSessionState() {
-            const session = loadSession();
-            if (session && session.username) {
-                currentUser = session;
-                isGuest = false;
-            } else if (session && session.guest) {
-                currentUser = null;
-                isGuest = true;
+        function updateRatingMessage() {
+            const playedIds = getPlayedContext();
+            if (!currentUser && isGuest) {
+                resultDiv.textContent = 'Sign in to calculate your rating.';
+                resultDiv.style.display = 'block';
+                return;
             }
-            updateUiForAuth();
-            if (session && session.games) {
-                games = session.games;
-                renderGames();
-                $('#searchWrapper').show();
-                $('#calculateBtn').toggleClass('disabled-overlay', isGuest);
-                $('#calculateBtn').show();
+            if (!currentUser) {
+                resultDiv.style.display = 'none';
+                return;
             }
+            if (!isCurrentUserVerified()) {
+                resultDiv.textContent = 'Please verify your email or sign in with Google to calculate ratings.';
+                resultDiv.style.display = 'block';
+                return;
+            }
+            if (playedIds.length === 0) {
+                resultDiv.style.display = 'none';
+                return;
+            }
+            const selectedGames = games.filter(game => playedIds.includes(game.id) && game.score);
+            const scoreSum = selectedGames.reduce((sum, game) => sum + game.score, 0);
+            const avgScore = selectedGames.length ? scoreSum / selectedGames.length : 0;
+            const rating = getRatingText(avgScore);
+            resultDiv.innerHTML = `You've marked ${playedIds.length} games played. Average score: ${avgScore.toFixed(1)} / 100. Rating: <strong>${rating}</strong>`;
+            resultDiv.style.display = 'block';
         }
 
-        function setUserSession(user) {
+        function getRatingText(avgScore) {
+            if (avgScore < 75) return 'Novice';
+            if (avgScore < 80) return 'Beginner';
+            if (avgScore < 85) return 'Intermediate';
+            if (avgScore < 90) return 'Advanced';
+            if (avgScore < 95) return 'Expert';
+            return 'Platinum';
+        }
+
+        async function loadUserData(user) {
             currentUser = user;
-            isGuest = false;
-            saveSession(user);
-            updateUiForAuth();
-            hideMessage();
+            playedGames = [];
+            const doc = await getUserRef().get();
+            if (doc.exists) {
+                const data = doc.data();
+                playedGames = data.played || [];
+            } else {
+                await getUserRef().set({ email: currentUser.email, played: [], lastUpdated: firebase.firestore.FieldValue.serverTimestamp() });
+            }
+            await fetchGameLibrary(searchInput.value.trim());
+            searchWrapper.style.display = 'block';
+            calculateBtn.style.display = 'inline-block';
+            calculateBtn.disabled = !isCurrentUserVerified();
+            calculateBtn.classList.toggle('disabled-overlay', !isCurrentUserVerified());
+            updateRatingMessage();
         }
 
-        function setGuestSession() {
-            currentUser = null;
-            isGuest = true;
-            saveSession({ guest: true });
-            updateUiForAuth();
-            hideMessage();
+        async function saveProgress() {
+            if (!currentUser) return;
+            await getUserRef().set({ played: playedGames, lastUpdated: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
         }
 
-        $('#signupBtn').on('click', function() {
-            const username = $('#username').val().trim();
-            const password = $('#password').val().trim();
-            if (!username || !password) {
-                showMessage('Enter both username and password.', 'danger');
-                return;
+        auth.onAuthStateChanged(async (user) => {
+            if (user) {
+                currentUser = user;
+                isGuest = false;
+                localStorage.removeItem('guestMode');
+                localStorage.removeItem('guestPlayed');
+                updateAuthUI();
+                await loadUserData(user);
+                hideMessage();
+            } else {
+                currentUser = null;
+                if (localStorage.getItem('guestMode') === 'true') {
+                    isGuest = true;
+                    playedGames = JSON.parse(localStorage.getItem('guestPlayed') || '[]');
+                    updateAuthUI();
+                    await fetchGameLibrary(searchInput.value.trim());
+                    searchWrapper.style.display = 'block';
+                    calculateBtn.style.display = 'inline-block';
+                    calculateBtn.classList.add('disabled-overlay');
+                    calculateBtn.disabled = true;
+                    updateRatingMessage();
+                } else {
+                    isGuest = false;
+                    playedGames = [];
+                    updateAuthUI();
+                    renderGames();
+                }
             }
-            const accounts = loadAccounts();
-            if (accounts[username]) {
-                showMessage('Username already exists. Please choose another.', 'danger');
-                return;
-            }
-            accounts[username] = { username, password };
-            saveAccounts(accounts);
-            setUserSession({ username });
-            showMessage('Sign up successful! You are now logged in.', 'success');
         });
 
-        $('#loginBtn').on('click', function() {
-            const username = $('#username').val().trim();
-            const password = $('#password').val().trim();
-            const accounts = loadAccounts();
-            if (!username || !password) {
-                showMessage('Enter both username and password.', 'danger');
-                return;
-            }
-            if (!accounts[username] || accounts[username].password !== password) {
-                showMessage('Invalid username or password.', 'danger');
-                return;
-            }
-            setUserSession({ username });
-            showMessage('Login successful! You can now connect Steam.', 'success');
-        });
-
-        $('#guestBtn').on('click', function() {
-            setGuestSession();
-            $('#searchWrapper').show();
-            $('#calculateBtn').show();
-            $('#calculateBtn').addClass('disabled-overlay');
-            showMessage('Guest mode active. Sign in to calculate scores.', 'info');
-        });
-
-        $('#signoutBtn').on('click', function() {
-            localStorage.removeItem(sessionKey);
-            currentUser = null;
-            isGuest = false;
-            games = [];
-            $('#searchWrapper').hide();
-            $('#calculateBtn').hide();
-            $('#gameList').empty();
-            $('#result').hide();
-            $('#username, #password').show().val('');
-            updateUiForAuth();
-            showMessage('You have signed out.', 'success');
-        });
-
-        $('#fetchBtn').on('click', async function() {
-            const apiKey = $('#apiKey').val().trim();
-            const steamId = $('#steamId').val().trim();
-            if (!apiKey || !steamId) {
-                showMessage('Steam API Key and Steam ID are required.', 'danger');
+        document.getElementById('loginBtn').addEventListener('click', async () => {
+            const email = emailInput.value.trim();
+            const password = passwordInput.value.trim();
+            if (!email || !password) {
+                showMessage('Please enter email and password.', 'danger');
                 return;
             }
             try {
-                const ownedResponse = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(`http://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/?key=${apiKey}&steamid=${steamId}&format=json&include_appinfo=1`)}`);
-                const ownedData = await ownedResponse.json();
-                if (!ownedData.response || !ownedData.response.games) {
-                    showMessage('No games found or invalid Steam credentials.', 'danger');
-                    return;
-                }
-                const appids = ownedData.response.games.map(g => g.appid).slice(0, 50);
-                const detailsResponse = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(`https://store.steampowered.com/api/appdetails?appids=${appids.join(',')}`)}`);
-                const detailsData = await detailsResponse.json();
-                games = ownedData.response.games.slice(0, 50).map(game => {
-                    const detail = detailsData[game.appid];
-                    const score = detail && detail.success ? (detail.data.metacritic ? detail.data.metacritic.score : 0) : 0;
-                    return {
-                        name: game.name,
-                        score: score,
-                        appid: game.appid,
-                        image: `https://steamcdn-a.akamaihd.net/steam/apps/${game.appid}/header.jpg`
-                    };
-                });
-                renderGames();
-                $('#searchWrapper').show();
-                $('#calculateBtn').show();
-                if (isGuest) {
-                    $('#calculateBtn').addClass('disabled-overlay');
-                } else {
-                    $('#calculateBtn').removeClass('disabled-overlay');
-                }
-                saveSession({ ...(currentUser || {}), guest: isGuest, games });
-                hideMessage();
+                await auth.signInWithEmailAndPassword(email, password);
             } catch (error) {
-                showMessage('Error fetching games. Use a local server if CORS blocks Steam API.', 'danger');
+                showMessage(error.message, 'danger');
             }
         });
 
-        $('#search').on('keyup', function() {
-            renderGames($(this).val());
+        document.getElementById('signupBtn').addEventListener('click', async () => {
+            const email = emailInput.value.trim();
+            const password = passwordInput.value.trim();
+            if (!email || !password) {
+                showMessage('Please enter email and password.', 'danger');
+                return;
+            }
+            try {
+                const { user } = await auth.createUserWithEmailAndPassword(email, password);
+                await user.sendEmailVerification();
+                showMessage('Verification email sent. Check your inbox before calculating ratings.', 'success');
+            } catch (error) {
+                showMessage(error.message, 'danger');
+            }
         });
 
-        $('#calculateBtn').on('click', function() {
-            if (isGuest) {
-                showMessage('Guests cannot calculate score. Please sign up or log in.', 'warning');
-                return;
+        document.getElementById('googleSignInBtn').addEventListener('click', async () => {
+            try {
+                await auth.signInWithPopup(provider);
+            } catch (error) {
+                showMessage(error.message, 'danger');
             }
-            const checked = $('input[type="checkbox"]:checked');
-            if (checked.length === 0) {
-                $('#result').html('You haven\'t selected any games. Rating: <strong>Novice</strong>').show();
-                return;
-            }
-            let totalScore = 0;
-            let validScores = 0;
-            checked.each(function() {
-                const gameName = $(this).val();
-                const game = games.find(g => g.name === gameName);
-                if (game && game.score > 0) {
-                    totalScore += game.score;
-                    validScores++;
-                }
-            });
-            if (validScores === 0) {
-                $('#result').html(`You've played ${checked.length} games, but no Metacritic scores available. Rating: <strong>Novice</strong>`).show();
-                return;
-            }
-            const avgScore = totalScore / validScores;
-            let rating;
-            if (avgScore < 75) rating = "Novice";
-            else if (avgScore < 80) rating = "Beginner";
-            else if (avgScore < 85) rating = "Intermediate";
-            else if (avgScore < 90) rating = "Advanced";
-            else if (avgScore < 95) rating = "Expert";
-            else rating = "Platinum";
-            $('#result').html(`You've played ${checked.length} games with an average Metacritic score of ${avgScore.toFixed(1)}/100. Your rating: <strong>${rating}</strong>`).show();
         });
 
-        loadSessionState();
+        document.getElementById('guestBtn').addEventListener('click', () => {
+            isGuest = true;
+            currentUser = null;
+            localStorage.setItem('guestMode', 'true');
+            localStorage.setItem('guestPlayed', JSON.stringify([]));
+            playedGames = [];
+            updateAuthUI();
+            renderGames();
+            fetchGameLibrary();
+            searchWrapper.style.display = 'block';
+            calculateBtn.style.display = 'inline-block';
+            calculateBtn.classList.add('disabled-overlay');
+            calculateBtn.disabled = true;
+            showMessage('Guest mode active. Sign in to calculate ratings.', 'info');
+        });
+
+        signoutBtn.addEventListener('click', async () => {
+            await auth.signOut();
+            localStorage.removeItem('guestMode');
+            localStorage.removeItem('guestPlayed');
+            currentUser = null;
+            isGuest = false;
+            playedGames = [];
+            renderGames();
+            searchWrapper.style.display = 'none';
+            calculateBtn.style.display = 'none';
+            resultDiv.style.display = 'none';
+            updateAuthUI();
+            showMessage('Signed out successfully.', 'success');
+        });
+
+        searchInput.addEventListener('input', () => {
+            const query = searchInput.value.trim();
+            if (query.length >= 2) {
+                clearTimeout(searchTimer);
+                searchTimer = setTimeout(() => fetchGameLibrary(query), 300);
+            } else {
+                renderGames();
+            }
+        });
+
+        calculateBtn.addEventListener('click', () => {
+            if (!currentUser || !isCurrentUserVerified()) {
+                showMessage('Sign in with a verified account to calculate rating.', 'warning');
+                return;
+            }
+            updateRatingMessage();
+        });
+
+        renderGames();
+        updateAuthUI();
     </script>
 </body>
 </html>
